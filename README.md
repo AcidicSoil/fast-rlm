@@ -60,6 +60,24 @@ cd tui_log_viewer && bun install
 
 ---
 
+## API Key Setup
+
+fast-rlm uses [OpenRouter](https://openrouter.ai) for LLM access. Set your API key in either a `.env` file or `.envrc` (for direnv users):
+
+**.env**
+```
+OPENROUTER_API_KEY=sk-or-...
+```
+
+**.envrc**
+```bash
+export OPENROUTER_API_KEY=sk-or-...
+```
+
+Deno picks up `.env` automatically. If using `.envrc`, run `direnv allow` once in the project root.
+
+---
+
 ## Configuration
 
 All hyperparameters are set in `rlm_config.yaml` at the project root:
