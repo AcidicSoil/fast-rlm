@@ -8,6 +8,7 @@
  */
 
 import chalk from "npm:chalk@5";
+import { CliError, EXIT_CODES, exitCodeForError } from "./cli_common.ts";
 
 interface LogEntry {
     level: number;
@@ -29,12 +30,48 @@ interface RunNode {
     children: RunNode[];
 }
 
+export interface LogsViewCommandOptions {
+    filePath: string;
+    mode?: "--tree" | "--stats" | "--linear";
+}
+
+function sanitizeForTerminal(text: string): string {
+    return text.replace(/[\u001b\u009b][[\]()#;?]*(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007|(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~])/g, "");
+}
+
+function assertLogEntry(entry: unknown, lineNumber: number): LogEntry {
+    if (!entry || typeof entry !== "object") {
+        throw new Error(`Invalid log entry at line ${lineNumber}: expected object`);
+    }
+    const candidate = entry as Record<string, unknown>;
+    if (typeof candidate.run_id !== "string" || candidate.run_id.length === 0) {
+        throw new Error(`Invalid log entry at line ${lineNumber}: missing run_id`);
+    }
+    if (typeof candidate.event_type !== "string" || candidate.event_type.length === 0) {
+        throw new Error(`Invalid log entry at line ${lineNumber}: missing event_type`);
+    }
+    if (typeof candidate.time !== "number") {
+        throw new Error(`Invalid log entry at line ${lineNumber}: missing numeric time`);
+    }
+    return candidate as LogEntry;
+}
+
 async function parseLogFile(filePath: string): Promise<LogEntry[]> {
     const content = await Deno.readTextFile(filePath);
-    return content
-        .split("\n")
-        .filter((line) => line.trim())
-        .map((line) => JSON.parse(line));
+    const lines = content.split("\n");
+    const entries: LogEntry[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(line);
+        } catch {
+            throw new Error(`Malformed JSONL at line ${i + 1}`);
+        }
+        entries.push(assertLogEntry(parsed, i + 1));
+    }
+    return entries;
 }
 
 function buildRunTree(entries: LogEntry[]): Map<string, RunNode> {
@@ -167,7 +204,7 @@ function printLinear(entries: LogEntry[]) {
         if (entry.event_type === "code_generated" && entry.code) {
             console.log(chalk.blue("  Code:"));
             console.log(
-                entry.code
+                sanitizeForTerminal(entry.code)
                     .split("\n")
                     .slice(0, 5)
                     .map((l: string) => "    " + l)
@@ -182,7 +219,7 @@ function printLinear(entries: LogEntry[]) {
             }
         } else if (entry.event_type === "execution_result" && entry.output) {
             const color = entry.hasError ? chalk.red : chalk.green;
-            console.log(color(`  Output: ${entry.output.slice(0, 100)}`));
+            console.log(color(`  Output: ${sanitizeForTerminal(entry.output).slice(0, 100)}`));
         } else if (entry.event_type === "final_result") {
             // Final result event - no usage displayed here, see per-step usage above
         }
@@ -191,25 +228,34 @@ function printLinear(entries: LogEntry[]) {
     }
 }
 
-if (import.meta.main) {
-    const args = Deno.args;
-
-    if (args.length === 0) {
-        console.error(
-            "Usage: deno run --allow-read src/view_logs.ts <log-file.jsonl> [--tree|--stats]"
-        );
-        Deno.exit(1);
+export async function runLogsViewCommand(options: LogsViewCommandOptions): Promise<number> {
+    if (!options.filePath) {
+        throw new CliError("usage", "Usage: rlm logs view <log-file.jsonl> [--tree|--stats|--linear]");
     }
 
-    const filePath = args[0];
-    const mode = args[1] || "--tree";
+    const mode = options.mode ?? "--tree";
+    if (mode !== "--tree" && mode !== "--stats" && mode !== "--linear") {
+        throw new CliError("usage", `Unknown logs view mode '${mode}'. Expected --tree, --stats, or --linear.`);
+    }
 
-    const entries = await parseLogFile(filePath);
+    let entries: LogEntry[];
+    try {
+        entries = await parseLogFile(options.filePath);
+    } catch (err) {
+        if (err instanceof Deno.errors.NotFound) {
+            throw new CliError("usage", `Log file not found: ${options.filePath}`, { cause: err });
+        }
+        throw new CliError("runtime", err instanceof Error ? err.message : String(err), { cause: err });
+    }
+
     const nodes = buildRunTree(entries);
 
     if (mode === "--stats") {
         printStats(entries, nodes);
-    } else if (mode === "--tree") {
+        return EXIT_CODES.OK;
+    }
+
+    if (mode === "--tree") {
         console.log(chalk.bold.cyan("\n── Run Tree ──\n"));
         const roots = Array.from(nodes.values()).filter((n) => !n.parent_run_id);
         roots.forEach((root, i) => {
@@ -217,7 +263,26 @@ if (import.meta.main) {
         });
         console.log();
         printStats(entries, nodes);
-    } else {
-        printLinear(entries);
+        return EXIT_CODES.OK;
+    }
+
+    printLinear(entries);
+    return EXIT_CODES.OK;
+}
+
+if (import.meta.main) {
+    const args = Deno.args;
+
+    try {
+        const filePath = args[0];
+        const modeArg = args[1];
+        const code = await runLogsViewCommand({
+            filePath,
+            mode: modeArg as LogsViewCommandOptions["mode"] | undefined,
+        });
+        Deno.exit(code);
+    } catch (err) {
+        console.error(err instanceof Error ? err.message : String(err));
+        Deno.exit(exitCodeForError(err));
     }
 }

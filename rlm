@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+exec deno run --env-file=.env --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/cli.ts run "$@"

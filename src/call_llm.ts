@@ -1,5 +1,6 @@
 import { OpenAI } from "openai";
 import { SYSTEM_PROMPT } from "./prompt.ts";
+import { normalizeUsage, resolveProxyClientConfig } from "./provider_config.ts";
 
 export interface Usage {
     prompt_tokens: number;
@@ -17,26 +18,21 @@ interface CodeReturn {
     usage: Usage;
 }
 
-const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-
 export async function generate_code(
     messages: any[],
     model_name: string
 ): Promise<CodeReturn> {
+    const { apiKey, baseURL } = resolveProxyClientConfig();
     const client = new OpenAI({
-        apiKey: apiKey,
-        baseURL: "https://openrouter.ai/api/v1",
+        apiKey,
+        baseURL,
     });
     const completion = await client.chat.completions.create({
-        // model: "openai/gpt-5.2-codex",
-        // model: "z-ai/glm-5",
-        // model: "minimax/minimax-m2.5",
         model: model_name,
         messages: [
             { role: "system", content: SYSTEM_PROMPT },
             ...messages
         ],
-        reasoning: { 'effort': 'low' },
         temperature: 0.1, // Low temperature for code generation
     });
 
@@ -45,14 +41,7 @@ export async function generate_code(
     const replMatches = [...content.matchAll(/```repl([\s\S]*?)```/g)];
     let code = replMatches.map(m => m[1].trim()).join("\n");
 
-    const usage = {
-        prompt_tokens: completion.usage.prompt_tokens,
-        completion_tokens: completion.usage.completion_tokens,
-        total_tokens: completion.usage.total_tokens,
-        cached_tokens: completion.usage?.prompt_tokens_details?.cached_tokens,
-        reasoning_tokens: completion.usage?.completion_tokens_details?.reasoning_tokens,
-        cost: completion.usage.cost,
-    }
+    const usage = normalizeUsage(completion.usage);
     if (!code) {
         return {
             code: "",
@@ -75,8 +64,7 @@ if (import.meta.main) {
     const query_context = "Just return fibonacci sequence";
     const out = await generate_code([
         { "role": "user", "content": query_context }
-    ]);
+    ], "gemini-2.5-pro");
     console.log(out)
 
 }
-

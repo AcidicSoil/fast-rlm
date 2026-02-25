@@ -1,8 +1,14 @@
 {
   "tasks": {
-    "subagent": "FORCE_COLOR=1 deno run --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/subagents.ts",
-    "test_counting_r": "FORCE_COLOR=1 deno run --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write test_counting_r.ts",
-    "view_logs": "deno run --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/view_logs.ts"
+    "subagent_raw": "FORCE_COLOR=1 deno run --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/subagents.ts",
+    "subagent": "FORCE_COLOR=1 deno run --env-file=.env --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/subagents.ts",
+    "test_counting_r": "FORCE_COLOR=1 deno run --env-file=.env --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write test_counting_r.ts",
+    "view_logs": "deno run --env-file=.env --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/view_logs.ts",
+    "smoke_proxy": "deno run --env-file=.env --allow-env --allow-net src/smoke_proxy.ts",
+    "cli": "FORCE_COLOR=1 deno run --env-file=.env --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write src/cli.ts",
+    "test": "deno test --allow-read --allow-env --allow-net --allow-sys=hostname --allow-write",
+    "rlm": "./rlm",
+    "rlm_smoke": "./rlm-smoke"
 
 
   },

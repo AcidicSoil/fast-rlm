@@ -3,6 +3,12 @@ import chalk from "npm:chalk@5";
 import yoctoSpinner from "npm:yocto-spinner@1";
 import type { Usage } from "./call_llm.ts";
 
+let terminalUiEnabled = true;
+
+export function setTerminalUiEnabled(enabled: boolean): void {
+    terminalUiEnabled = enabled;
+}
+
 const GUTTER = "    │ ";
 const GUTTER_WIDTH = 6;
 
@@ -41,6 +47,7 @@ export interface StepData {
 }
 
 export function printStep(data: StepData): void {
+    if (!terminalUiEnabled) return;
     const { depth, step, maxSteps, code, output, hasError, usage, totalUsage } = data;
     const w = boxWidth(depth);
     const parts: string[] = [];
@@ -114,14 +121,17 @@ export function printStep(data: StepData): void {
 // ── Standalone helpers (not part of a step) ─────────────────────────
 
 export function showPythonReady(depth: number): void {
+    if (!terminalUiEnabled) return;
     console.log(indent(chalk.green.bold("✔ Python Ready"), depth));
 }
 
 export function showLlmQueryCall(depth: number): void {
+    if (!terminalUiEnabled) return;
     console.log(indent(chalk.cyan.bold("↳ llm_query called"), depth));
 }
 
 export function showFinalResult(result: unknown, depth: number): void {
+    if (!terminalUiEnabled) return;
     const text = typeof result === "string" ? result : JSON.stringify(result, null, 2);
     const w = boxWidth(depth);
     const banner = boxen(chalk.green(text), {
@@ -136,10 +146,18 @@ export function showFinalResult(result: unknown, depth: number): void {
 }
 
 export function startSpinner(text: string) {
+    if (!terminalUiEnabled) {
+        return {
+            success: () => undefined,
+            error: () => undefined,
+            stop: () => undefined,
+        };
+    }
     return yoctoSpinner({ text }).start();
 }
 
 export function showGlobalUsage(totalUsage: Usage): void {
+    if (!terminalUiEnabled) return;
     const usageParts = [
         `${chalk.cyan(totalUsage.prompt_tokens.toLocaleString())} prompt`,
         `${chalk.cyan(totalUsage.completion_tokens.toLocaleString())} completion`,

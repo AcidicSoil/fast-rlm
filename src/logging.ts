@@ -16,6 +16,7 @@ export type { StepData };
 let pinoLogger: pino.Logger;
 let currentLogFile: string | null = null;
 let logPrefix: string | null = null;
+let terminalLoggingEnabled = true;
 
 /** Set a custom prefix for the log filename (call before any logging) */
 export function setLogPrefix(prefix: string) {
@@ -25,6 +26,10 @@ export function setLogPrefix(prefix: string) {
 /** Get the current log file path */
 export function getLogFile(): string | null {
     return currentLogFile;
+}
+
+export function setTerminalLoggingEnabled(enabled: boolean): void {
+    terminalLoggingEnabled = enabled;
 }
 
 function initPino() {
@@ -45,7 +50,9 @@ function initPino() {
             base: null, // Skip hostname/pid to avoid --allow-sys requirement
         }, pino.destination({ dest: currentLogFile, sync: false }));
 
-        console.log(chalk.dim(`📝 Logging to: ${currentLogFile}\n`));
+        if (terminalLoggingEnabled) {
+            console.log(chalk.dim(`📝 Logging to: ${currentLogFile}\n`));
+        }
     }
     return pinoLogger;
 }
